@@ -1,0 +1,23 @@
+# Claude Code
+.claude/settings.local.json
+.claude/handoff-*.md
+.claude/backups/
+
+# bkit
+.bkit/
+
+# 환경변수
+.env
+.env.local
+.env.*.local
+
+# 의존성
+node_modules/
+
+# 빌드
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
