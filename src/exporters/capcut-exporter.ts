@@ -2,7 +2,7 @@ import { mkdir, writeFile, copyFile } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { platform } from "node:os";
-import type { Timeline, TimelineSegment } from "../types/index.js";
+import type { Timeline, TimelineSegment, Result } from "../types/index.js";
 import {
   CAPCUT_VERSION,
   CAPCUT_NEW_VERSION,
@@ -433,350 +433,370 @@ function defaultTextMaterial(id: string, text: string) {
 export async function exportCapCut(
   timeline: Timeline,
   options: ExportOptions,
-): Promise<{ projectPath: string }> {
-  const projectId = randomUUID().toUpperCase();
-  const draftFolderId = randomUUID().toUpperCase();
-  const projectPath = join(options.outputDir, projectId);
-  const materialDir = join(projectPath, "ai_material");
+): Promise<Result<{ projectPath: string }>> {
+  try {
+    const projectId = randomUUID().toUpperCase();
+    const draftFolderId = randomUUID().toUpperCase();
+    const projectPath = join(options.outputDir, projectId);
+    const materialDir = join(projectPath, "ai_material");
 
-  // 폴더 생성
-  await mkdir(materialDir, { recursive: true });
+    // 폴더 생성
+    await mkdir(materialDir, { recursive: true });
 
-  // 미디어 파일 복사 + 경로 맵 구축
-  const pathPrefix = `##_draftpath_placeholder_${draftFolderId}_##`;
-  const allVideoMaterials: ReturnType<typeof defaultVideoMaterial>[] = [];
-  const allAudioMaterials: ReturnType<typeof defaultAudioMaterial>[] = [];
-  const allTextMaterials: ReturnType<typeof defaultTextMaterial>[] = [];
-  const allSpeeds: ReturnType<
-    typeof createAuxMaterials
-  >["materials"]["speed"][] = [];
-  const allCanvases: ReturnType<
-    typeof createAuxMaterials
-  >["materials"]["canvas"][] = [];
-  const allAnimations: ReturnType<
-    typeof createAuxMaterials
-  >["materials"]["animation"][] = [];
-  const allPlaceholders: ReturnType<
-    typeof createAuxMaterials
-  >["materials"]["placeholder"][] = [];
-  const allSoundChannels: ReturnType<
-    typeof createAuxMaterials
-  >["materials"]["soundChannel"][] = [];
-  const allMaterialColors: ReturnType<
-    typeof createAuxMaterials
-  >["materials"]["materialColor"][] = [];
-  const allVocalSeps: ReturnType<
-    typeof createAuxMaterials
-  >["materials"]["vocalSep"][] = [];
+    // 미디어 파일 복사 + 경로 맵 구축
+    const pathPrefix = `##_draftpath_placeholder_${draftFolderId}_##`;
+    const allVideoMaterials: ReturnType<typeof defaultVideoMaterial>[] = [];
+    const allAudioMaterials: ReturnType<typeof defaultAudioMaterial>[] = [];
+    const allTextMaterials: ReturnType<typeof defaultTextMaterial>[] = [];
+    const allSpeeds: ReturnType<
+      typeof createAuxMaterials
+    >["materials"]["speed"][] = [];
+    const allCanvases: ReturnType<
+      typeof createAuxMaterials
+    >["materials"]["canvas"][] = [];
+    const allAnimations: ReturnType<
+      typeof createAuxMaterials
+    >["materials"]["animation"][] = [];
+    const allPlaceholders: ReturnType<
+      typeof createAuxMaterials
+    >["materials"]["placeholder"][] = [];
+    const allSoundChannels: ReturnType<
+      typeof createAuxMaterials
+    >["materials"]["soundChannel"][] = [];
+    const allMaterialColors: ReturnType<
+      typeof createAuxMaterials
+    >["materials"]["materialColor"][] = [];
+    const allVocalSeps: ReturnType<
+      typeof createAuxMaterials
+    >["materials"]["vocalSep"][] = [];
 
-  const tracks: Record<string, unknown>[] = [];
+    const tracks: Record<string, unknown>[] = [];
 
-  // 비디오 트랙
-  const videoSegments: Record<string, unknown>[] = [];
-  for (const seg of timeline.videoTrack) {
-    if (seg.filePath) {
-      const fileName = basename(seg.filePath);
-      const destPath = join(materialDir, fileName);
-      try {
-        await copyFile(seg.filePath, destPath);
-      } catch {
-        /* 파일 없으면 스킵 */
+    // 비디오 트랙
+    const videoSegments: Record<string, unknown>[] = [];
+    for (const seg of timeline.videoTrack) {
+      if (seg.filePath) {
+        const fileName = basename(seg.filePath);
+        const destPath = join(materialDir, fileName);
+        try {
+          await copyFile(seg.filePath, destPath);
+        } catch {
+          /* 파일 없으면 스킵 */
+        }
+        const materialPath = `${pathPrefix}/ai_material/${fileName}`;
+        const mat = defaultVideoMaterial(
+          seg.materialId,
+          materialPath,
+          seg.duration,
+          timeline.canvas.width,
+          timeline.canvas.height,
+        );
+        allVideoMaterials.push(mat);
+
+        const aux = createAuxMaterials();
+        allSpeeds.push(aux.materials.speed);
+        allCanvases.push(aux.materials.canvas);
+        allAnimations.push(aux.materials.animation);
+        allPlaceholders.push(aux.materials.placeholder);
+        allSoundChannels.push(aux.materials.soundChannel);
+        allMaterialColors.push(aux.materials.materialColor);
+        allVocalSeps.push(aux.materials.vocalSep);
+
+        videoSegments.push({
+          id: randomUUID().toUpperCase(),
+          material_id: seg.materialId,
+          extra_material_refs: aux.refs,
+          source_timerange: { start: 0, duration: seg.duration },
+          target_timerange: { start: seg.start, duration: seg.duration },
+          render_timerange: { start: 0, duration: 0 },
+          ...defaultSegmentProps(),
+        });
       }
-      const materialPath = `${pathPrefix}/ai_material/${fileName}`;
-      const mat = defaultVideoMaterial(
-        seg.materialId,
-        materialPath,
-        seg.duration,
-        timeline.canvas.width,
-        timeline.canvas.height,
-      );
-      allVideoMaterials.push(mat);
+    }
 
-      const aux = createAuxMaterials();
-      allSpeeds.push(aux.materials.speed);
-      allCanvases.push(aux.materials.canvas);
-      allAnimations.push(aux.materials.animation);
-      allPlaceholders.push(aux.materials.placeholder);
-      allSoundChannels.push(aux.materials.soundChannel);
-      allMaterialColors.push(aux.materials.materialColor);
-      allVocalSeps.push(aux.materials.vocalSep);
-
-      videoSegments.push({
+    if (videoSegments.length > 0) {
+      tracks.push({
         id: randomUUID().toUpperCase(),
-        material_id: seg.materialId,
-        extra_material_refs: aux.refs,
-        source_timerange: { start: 0, duration: seg.duration },
-        target_timerange: { start: seg.start, duration: seg.duration },
-        render_timerange: { start: 0, duration: 0 },
-        ...defaultSegmentProps(),
+        type: "video",
+        attribute: 0,
+        flag: 0,
+        is_default_name: true,
+        name: "",
+        segments: videoSegments,
       });
     }
-  }
 
-  if (videoSegments.length > 0) {
-    tracks.push({
-      id: randomUUID().toUpperCase(),
-      type: "video",
-      attribute: 0,
-      flag: 0,
-      is_default_name: true,
-      name: "",
-      segments: videoSegments,
-    });
-  }
+    // 오디오 트랙
+    const audioSegments: Record<string, unknown>[] = [];
+    for (const seg of timeline.audioTrack) {
+      if (seg.filePath) {
+        const fileName = basename(seg.filePath);
+        const destPath = join(materialDir, fileName);
+        try {
+          await copyFile(seg.filePath, destPath);
+        } catch {
+          /* 스킵 */
+        }
+        const materialPath = `${pathPrefix}/ai_material/${fileName}`;
+        const mat = defaultAudioMaterial(
+          seg.materialId,
+          materialPath,
+          seg.duration,
+        );
+        allAudioMaterials.push(mat);
 
-  // 오디오 트랙
-  const audioSegments: Record<string, unknown>[] = [];
-  for (const seg of timeline.audioTrack) {
-    if (seg.filePath) {
-      const fileName = basename(seg.filePath);
-      const destPath = join(materialDir, fileName);
-      try {
-        await copyFile(seg.filePath, destPath);
-      } catch {
-        /* 스킵 */
+        const aux = createAuxMaterials();
+        allSpeeds.push(aux.materials.speed);
+        allCanvases.push(aux.materials.canvas);
+        allAnimations.push(aux.materials.animation);
+        allPlaceholders.push(aux.materials.placeholder);
+        allSoundChannels.push(aux.materials.soundChannel);
+        allMaterialColors.push(aux.materials.materialColor);
+        allVocalSeps.push(aux.materials.vocalSep);
+
+        audioSegments.push({
+          id: randomUUID().toUpperCase(),
+          material_id: seg.materialId,
+          extra_material_refs: aux.refs,
+          source_timerange: { start: 0, duration: seg.duration },
+          target_timerange: { start: seg.start, duration: seg.duration },
+          render_timerange: { start: 0, duration: 0 },
+          ...defaultSegmentProps(),
+        });
       }
-      const materialPath = `${pathPrefix}/ai_material/${fileName}`;
-      const mat = defaultAudioMaterial(
-        seg.materialId,
-        materialPath,
-        seg.duration,
-      );
-      allAudioMaterials.push(mat);
+    }
 
-      const aux = createAuxMaterials();
-      allSpeeds.push(aux.materials.speed);
-      allPlaceholders.push(aux.materials.placeholder);
-      allSoundChannels.push(aux.materials.soundChannel);
-
-      audioSegments.push({
+    if (audioSegments.length > 0) {
+      tracks.push({
         id: randomUUID().toUpperCase(),
-        material_id: seg.materialId,
-        extra_material_refs: [
-          aux.materials.speed.id,
-          aux.materials.placeholder.id,
-          aux.materials.soundChannel.id,
-        ],
-        source_timerange: { start: 0, duration: seg.duration },
-        target_timerange: { start: seg.start, duration: seg.duration },
-        render_timerange: { start: 0, duration: 0 },
-        ...defaultSegmentProps(),
+        type: "audio",
+        attribute: 0,
+        flag: 0,
+        is_default_name: true,
+        name: "",
+        segments: audioSegments,
       });
     }
-  }
 
-  if (audioSegments.length > 0) {
-    tracks.push({
-      id: randomUUID().toUpperCase(),
-      type: "audio",
-      attribute: 0,
-      flag: 0,
-      is_default_name: true,
-      name: "",
-      segments: audioSegments,
-    });
-  }
+    // 텍스트 트랙
+    const textSegments: Record<string, unknown>[] = [];
+    for (const seg of timeline.textTrack) {
+      if (seg.text) {
+        const mat = defaultTextMaterial(seg.materialId, seg.text);
+        allTextMaterials.push(mat);
 
-  // 텍스트 트랙
-  const textSegments: Record<string, unknown>[] = [];
-  for (const seg of timeline.textTrack) {
-    if (seg.text) {
-      const mat = defaultTextMaterial(seg.materialId, seg.text);
-      allTextMaterials.push(mat);
+        const aux = createAuxMaterials();
+        allSpeeds.push(aux.materials.speed);
+        allCanvases.push(aux.materials.canvas);
+        allAnimations.push(aux.materials.animation);
+        allPlaceholders.push(aux.materials.placeholder);
+        allSoundChannels.push(aux.materials.soundChannel);
+        allMaterialColors.push(aux.materials.materialColor);
+        allVocalSeps.push(aux.materials.vocalSep);
 
-      textSegments.push({
+        textSegments.push({
+          id: randomUUID().toUpperCase(),
+          material_id: seg.materialId,
+          extra_material_refs: aux.refs,
+          source_timerange: { start: 0, duration: seg.duration },
+          target_timerange: { start: seg.start, duration: seg.duration },
+          render_timerange: { start: 0, duration: 0 },
+          ...defaultSegmentProps(),
+        });
+      }
+    }
+
+    if (textSegments.length > 0) {
+      tracks.push({
         id: randomUUID().toUpperCase(),
-        material_id: seg.materialId,
-        extra_material_refs: [],
-        source_timerange: { start: 0, duration: seg.duration },
-        target_timerange: { start: seg.start, duration: seg.duration },
-        render_timerange: { start: 0, duration: 0 },
-        ...defaultSegmentProps(),
+        type: "text",
+        attribute: 0,
+        flag: 0,
+        is_default_name: true,
+        name: "",
+        segments: textSegments,
       });
     }
+
+    // draft_content.json 조립
+    const draftContent = {
+      id: projectId,
+      version: CAPCUT_VERSION,
+      new_version: CAPCUT_NEW_VERSION,
+      name: options.projectName || "",
+      duration: timeline.totalDuration,
+      create_time: 0,
+      update_time: 0,
+      fps: DEFAULT_FPS,
+      is_drop_frame_timecode: false,
+      color_space: -1,
+      config: {
+        video_mute: false,
+        record_audio_last_index: 1,
+        extract_audio_last_index: 1,
+        original_sound_last_index: 1,
+        subtitle_recognition_id: "",
+        subtitle_taskinfo: [],
+        lyrics_recognition_id: "",
+        lyrics_taskinfo: [],
+        subtitle_sync: true,
+        lyrics_sync: true,
+        sticker_max_index: 1,
+        adjust_max_index: 1,
+        material_save_mode: 0,
+        export_range: null,
+        maintrack_adsorb: true,
+        combination_max_index: 1,
+        attachment_info: [],
+        zoom_info_params: null,
+        system_font_list: [],
+        multi_language_mode: "none",
+        multi_language_main: "none",
+        multi_language_current: "none",
+        multi_language_list: [],
+        subtitle_keywords_config: null,
+        use_float_render: false,
+      },
+      canvas_config: {
+        ratio: "original",
+        width: timeline.canvas.width,
+        height: timeline.canvas.height,
+        background: null,
+      },
+      tracks,
+      group_container: null,
+      materials: {
+        videos: allVideoMaterials,
+        audios: allAudioMaterials,
+        images: [],
+        texts: allTextMaterials,
+        effects: [],
+        stickers: [],
+        canvases: allCanvases,
+        transitions: [],
+        audio_effects: [],
+        audio_fades: [],
+        beats: [],
+        flowers: [],
+        material_animations: allAnimations,
+        placeholders: [],
+        placeholder_infos: allPlaceholders,
+        speeds: allSpeeds,
+        common_mask: [],
+        chromas: [],
+        text_templates: [],
+        realtime_denoises: [],
+        audio_pannings: [],
+        audio_pitch_shifts: [],
+        video_trackings: [],
+        hsl: [],
+        drafts: [],
+        color_curves: [],
+        hsl_curves: [],
+        primary_color_wheels: [],
+        log_color_wheels: [],
+        video_effects: [],
+        audio_balances: [],
+        handwrites: [],
+        manual_deformations: [],
+        manual_beautys: [],
+        plugin_effects: [],
+        sound_channel_mappings: allSoundChannels,
+        green_screens: [],
+        shapes: [],
+        material_colors: allMaterialColors,
+        digital_humans: [],
+        digital_human_model_dressing: [],
+        smart_crops: [],
+        ai_translates: [],
+        audio_track_indexes: [],
+        loudnesses: [],
+        vocal_beautifys: [],
+        vocal_separations: allVocalSeps,
+        smart_relights: [],
+        time_marks: [],
+        multi_language_refs: [],
+        video_shadows: [],
+        video_strokes: [],
+        video_radius: [],
+        tail_leaders: [],
+      },
+      keyframes: {
+        videos: [],
+        audios: [],
+        texts: [],
+        stickers: [],
+        filters: [],
+        adjusts: [],
+        handwrites: [],
+        effects: [],
+      },
+      keyframe_graph_list: [],
+      platform: {
+        os: platform() === "win32" ? "windows" : "mac",
+        os_version: "",
+        app_id: 359289,
+        app_version: "7.5.0",
+        app_source: "cc",
+        device_id: "",
+        hard_disk_id: "",
+        mac_address: "",
+      },
+      last_modified_platform: {
+        os: platform() === "win32" ? "windows" : "mac",
+        os_version: "",
+        app_id: 359289,
+        app_version: "7.5.0",
+        app_source: "cc",
+        device_id: "",
+        hard_disk_id: "",
+        mac_address: "",
+      },
+      mutable_config: null,
+      cover: null,
+      retouch_cover: null,
+      extra_info: null,
+      relationships: [],
+      render_index_track_mode_on: true,
+      free_render_index_mode_on: false,
+      static_cover_image_path: "",
+      source: "default",
+      time_marks: null,
+      path: "",
+      lyrics_effects: [],
+      draft_type: "video",
+    };
+
+    // 파일 쓰기
+    await writeFile(
+      join(projectPath, "draft_content.json"),
+      JSON.stringify(draftContent),
+      "utf-8",
+    );
+    await writeFile(join(projectPath, "draft_meta_info.json"), "{}", "utf-8");
+    await writeFile(join(projectPath, "draft_biz_config.json"), "", "utf-8");
+    await writeFile(
+      join(projectPath, "draft_agency_config.json"),
+      JSON.stringify({
+        is_auto_agency_enabled: false,
+        is_auto_agency_popup: false,
+        is_single_agency_mode: false,
+        marterials: null,
+        use_converter: false,
+        video_resolution: 720,
+      }),
+      "utf-8",
+    );
+
+    return { ok: true, data: { projectPath } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: {
+        code: "E006",
+        message: `CapCut 프로젝트 파일 생성 실패: ${(err as Error).message}`,
+        cause: err as Error,
+      },
+    };
   }
-
-  if (textSegments.length > 0) {
-    tracks.push({
-      id: randomUUID().toUpperCase(),
-      type: "text",
-      attribute: 0,
-      flag: 0,
-      is_default_name: true,
-      name: "",
-      segments: textSegments,
-    });
-  }
-
-  // draft_content.json 조립
-  const draftContent = {
-    id: projectId,
-    version: CAPCUT_VERSION,
-    new_version: CAPCUT_NEW_VERSION,
-    name: options.projectName || "",
-    duration: timeline.totalDuration,
-    create_time: 0,
-    update_time: 0,
-    fps: DEFAULT_FPS,
-    is_drop_frame_timecode: false,
-    color_space: -1,
-    config: {
-      video_mute: false,
-      record_audio_last_index: 1,
-      extract_audio_last_index: 1,
-      original_sound_last_index: 1,
-      subtitle_recognition_id: "",
-      subtitle_taskinfo: [],
-      lyrics_recognition_id: "",
-      lyrics_taskinfo: [],
-      subtitle_sync: true,
-      lyrics_sync: true,
-      sticker_max_index: 1,
-      adjust_max_index: 1,
-      material_save_mode: 0,
-      export_range: null,
-      maintrack_adsorb: true,
-      combination_max_index: 1,
-      attachment_info: [],
-      zoom_info_params: null,
-      system_font_list: [],
-      multi_language_mode: "none",
-      multi_language_main: "none",
-      multi_language_current: "none",
-      multi_language_list: [],
-      subtitle_keywords_config: null,
-      use_float_render: false,
-    },
-    canvas_config: {
-      ratio: "original",
-      width: timeline.canvas.width,
-      height: timeline.canvas.height,
-      background: null,
-    },
-    tracks,
-    group_container: null,
-    materials: {
-      videos: allVideoMaterials,
-      audios: allAudioMaterials,
-      images: [],
-      texts: allTextMaterials,
-      effects: [],
-      stickers: [],
-      canvases: allCanvases,
-      transitions: [],
-      audio_effects: [],
-      audio_fades: [],
-      beats: [],
-      flowers: [],
-      material_animations: allAnimations,
-      placeholders: [],
-      placeholder_infos: allPlaceholders,
-      speeds: allSpeeds,
-      common_mask: [],
-      chromas: [],
-      text_templates: [],
-      realtime_denoises: [],
-      audio_pannings: [],
-      audio_pitch_shifts: [],
-      video_trackings: [],
-      hsl: [],
-      drafts: [],
-      color_curves: [],
-      hsl_curves: [],
-      primary_color_wheels: [],
-      log_color_wheels: [],
-      video_effects: [],
-      audio_balances: [],
-      handwrites: [],
-      manual_deformations: [],
-      manual_beautys: [],
-      plugin_effects: [],
-      sound_channel_mappings: allSoundChannels,
-      green_screens: [],
-      shapes: [],
-      material_colors: allMaterialColors,
-      digital_humans: [],
-      digital_human_model_dressing: [],
-      smart_crops: [],
-      ai_translates: [],
-      audio_track_indexes: [],
-      loudnesses: [],
-      vocal_beautifys: [],
-      vocal_separations: allVocalSeps,
-      smart_relights: [],
-      time_marks: [],
-      multi_language_refs: [],
-      video_shadows: [],
-      video_strokes: [],
-      video_radius: [],
-      tail_leaders: [],
-    },
-    keyframes: {
-      videos: [],
-      audios: [],
-      texts: [],
-      stickers: [],
-      filters: [],
-      adjusts: [],
-      handwrites: [],
-      effects: [],
-    },
-    keyframe_graph_list: [],
-    platform: {
-      os: platform() === "win32" ? "windows" : "mac",
-      os_version: "",
-      app_id: 359289,
-      app_version: "7.5.0",
-      app_source: "cc",
-      device_id: "",
-      hard_disk_id: "",
-      mac_address: "",
-    },
-    last_modified_platform: {
-      os: platform() === "win32" ? "windows" : "mac",
-      os_version: "",
-      app_id: 359289,
-      app_version: "7.5.0",
-      app_source: "cc",
-      device_id: "",
-      hard_disk_id: "",
-      mac_address: "",
-    },
-    mutable_config: null,
-    cover: null,
-    retouch_cover: null,
-    extra_info: null,
-    relationships: [],
-    render_index_track_mode_on: true,
-    free_render_index_mode_on: false,
-    static_cover_image_path: "",
-    source: "default",
-    time_marks: null,
-    path: "",
-    lyrics_effects: [],
-    draft_type: "video",
-  };
-
-  // 파일 쓰기
-  await writeFile(
-    join(projectPath, "draft_content.json"),
-    JSON.stringify(draftContent),
-    "utf-8",
-  );
-  await writeFile(join(projectPath, "draft_meta_info.json"), "{}", "utf-8");
-  await writeFile(join(projectPath, "draft_biz_config.json"), "", "utf-8");
-  await writeFile(
-    join(projectPath, "draft_agency_config.json"),
-    JSON.stringify({
-      is_auto_agency_enabled: false,
-      is_auto_agency_popup: false,
-      is_single_agency_mode: false,
-      marterials: null,
-      use_converter: false,
-      video_resolution: 720,
-    }),
-    "utf-8",
-  );
-
-  return { projectPath };
 }

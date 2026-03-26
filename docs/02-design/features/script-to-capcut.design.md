@@ -249,7 +249,7 @@ interface Materials {
 
 interface VideoMaterial {
   id: string; // UUID (segment.material_id가 참조)
-  type: "video";
+  type: "photo"; // 이미지 소스는 "photo" (비디오 소스는 "video")
   duration: number; // 마이크로초
   path: string; // "##_draftpath_placeholder_UUID_##/ai_material/파일명"
   width: number; // 1280
@@ -392,14 +392,13 @@ async function generateTTS(
 
 ### 5.4 Timeline Builder (`src/timeline/timeline-builder.ts`)
 
-**입력**: Scene[], 생성된 에셋들
+**입력**: GeneratedAssets, canvas (선택)
 **출력**: Timeline
 
 ```typescript
 function buildTimeline(
-  scenes: Scene[],
   assets: GeneratedAssets,
-  config: { canvas: { width: number; height: number } },
+  canvas?: { width: number; height: number },
 ): Timeline;
 ```
 

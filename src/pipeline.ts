@@ -95,15 +95,16 @@ export async function runPipeline(
     };
   }
 
-  const { projectPath } = await exportCapCut(timeline, {
+  const exportResult = await exportCapCut(timeline, {
     outputDir: config.outputDir,
     projectName: config.projectName || "CutFlow Project",
   });
+  if (!exportResult.ok) return exportResult;
 
   return {
     ok: true,
     data: {
-      projectPath,
+      projectPath: exportResult.data.projectPath,
       sceneCount: scenes.length,
       totalDuration: timeline.totalDuration,
     },
