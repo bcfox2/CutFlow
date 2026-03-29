@@ -436,15 +436,15 @@ export async function exportCapCut(
 ): Promise<Result<{ projectPath: string }>> {
   try {
     const projectId = randomUUID().toUpperCase();
-    const draftFolderId = randomUUID().toUpperCase();
     const projectPath = join(options.outputDir, projectId);
     const materialDir = join(projectPath, "ai_material");
 
     // 폴더 생성
     await mkdir(materialDir, { recursive: true });
 
-    // 미디어 파일 복사 + 경로 맵 구축
-    const pathPrefix = `##_draftpath_placeholder_${draftFolderId}_##`;
+    // 미디어 파일 경로 (절대 경로, forward slash)
+    const absoluteProjectPath = projectPath.replace(/\\/g, "/");
+    const pathPrefix = absoluteProjectPath;
     const allVideoMaterials: ReturnType<typeof defaultVideoMaterial>[] = [];
     const allAudioMaterials: ReturnType<typeof defaultAudioMaterial>[] = [];
     const allTextMaterials: ReturnType<typeof defaultTextMaterial>[] = [];
@@ -767,13 +767,78 @@ export async function exportCapCut(
       draft_type: "video",
     };
 
+    // draft_meta_info.json 생성 (CapCut 미디어 연결에 필수)
+    const now = Date.now() * 1000; // 마이크로초 타임스탬프
+    const draftMetaInfo = {
+      cloud_draft_cover: false,
+      cloud_draft_sync: false,
+      cloud_package_completed_time: "",
+      draft_cloud_capcut_purchase_info: "",
+      draft_cloud_last_action_download: false,
+      draft_cloud_package_type: "",
+      draft_cloud_purchase_info: "",
+      draft_cloud_template_id: "",
+      draft_cloud_tutorial_info: "",
+      draft_cloud_videocut_purchase_info: "",
+      draft_cover: "",
+      draft_deeplink_url: "",
+      draft_enterprise_info: {
+        draft_enterprise_extra: "",
+        draft_enterprise_id: "",
+        draft_enterprise_name: "",
+        enterprise_material: [],
+      },
+      draft_fold_path: absoluteProjectPath,
+      draft_id: randomUUID().toUpperCase(),
+      draft_is_ae_produce: false,
+      draft_is_ai_packaging_used: false,
+      draft_is_ai_shorts: false,
+      draft_is_ai_translate: false,
+      draft_is_article_video_draft: false,
+      draft_is_cloud_temp_draft: false,
+      draft_is_from_deeplink: "false",
+      draft_is_invisible: false,
+      draft_is_web_article_video: false,
+      draft_materials: [
+        { type: 0, value: [] },
+        { type: 1, value: [] },
+        { type: 2, value: [] },
+        { type: 3, value: [] },
+        { type: 6, value: [] },
+      ],
+      draft_materials_copied_info: [],
+      draft_name: options.projectName || projectId,
+      draft_need_rename_folder: false,
+      draft_new_version: "",
+      draft_removable_storage_device: "",
+      draft_root_path: join(options.outputDir).replace(/\\/g, "/"),
+      draft_segment_extra_info: [],
+      draft_timeline_materials_size_: 0,
+      draft_type: "",
+      draft_web_article_video_enter_from: "",
+      tm_draft_cloud_completed: "",
+      tm_draft_cloud_entry_id: -1,
+      tm_draft_cloud_modified: 0,
+      tm_draft_cloud_parent_entry_id: -1,
+      tm_draft_cloud_space_id: -1,
+      tm_draft_cloud_user_id: -1,
+      tm_draft_create: now,
+      tm_draft_modified: now,
+      tm_draft_removed: 0,
+      tm_duration: timeline.totalDuration,
+    };
+
     // 파일 쓰기
     await writeFile(
       join(projectPath, "draft_content.json"),
       JSON.stringify(draftContent),
       "utf-8",
     );
-    await writeFile(join(projectPath, "draft_meta_info.json"), "{}", "utf-8");
+    await writeFile(
+      join(projectPath, "draft_meta_info.json"),
+      JSON.stringify(draftMetaInfo),
+      "utf-8",
+    );
     await writeFile(join(projectPath, "draft_biz_config.json"), "", "utf-8");
     await writeFile(
       join(projectPath, "draft_agency_config.json"),

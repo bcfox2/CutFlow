@@ -35,10 +35,9 @@ export async function generateImages(
             Authorization: `Bearer ${options.apiKey}`,
           },
           body: JSON.stringify({
-            model: "grok-2-image",
+            model: "grok-imagine-image",
             prompt,
             n: 1,
-            size: options.size || "1024x1024",
             response_format: "b64_json",
           }),
         });
