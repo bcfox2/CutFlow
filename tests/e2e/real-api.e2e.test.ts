@@ -21,7 +21,9 @@ describe.skipIf(!hasApiKeys)("E2E: 실제 API 호출", () => {
   it("실제 xAI + ElevenLabs로 CapCut 프로젝트 생성", async () => {
     const scriptPath = join(fixtureDir, "sample-2scene.txt");
     const config: CutFlowConfig = {
+      imageEngine: "grok",
       xaiApiKey: process.env.XAI_API_KEY!,
+      googleApiKey: process.env.GOOGLE_API_KEY || "",
       elevenLabsApiKey: process.env.ELEVENLABS_API_KEY!,
       elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID!,
       outputDir,

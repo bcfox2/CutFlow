@@ -1,16 +1,18 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir, platform } from "node:os";
-import type { CutFlowConfig, Result } from "../types/index.js";
+import type { CutFlowConfig, Result, ImageEngine } from "../types/index.js";
 import { DEFAULT_CANVAS } from "../types/index.js";
 
 const CONFIG_FILENAME = ".cutflowrc";
+const VALID_ENGINES: ImageEngine[] = ["grok", "gemini", "imagen"];
 
 // 기본 설정값
 const DEFAULTS: Omit<
   CutFlowConfig,
-  "xaiApiKey" | "elevenLabsApiKey" | "elevenLabsVoiceId"
+  "xaiApiKey" | "googleApiKey" | "elevenLabsApiKey" | "elevenLabsVoiceId"
 > = {
+  imageEngine: "grok" as ImageEngine,
   canvas: { ...DEFAULT_CANVAS, ratio: "original" },
   imageStyle: "realistic",
   imageSize: "1920x1080",
@@ -68,8 +70,22 @@ export async function loadConfig(
 ): Promise<Result<CutFlowConfig>> {
   const rc = await loadRcFile();
 
+  // 이미지 엔진 결정
+  const engineRaw =
+    overrides?.imageEngine || rc.imageEngine || DEFAULTS.imageEngine;
+  const imageEngine: ImageEngine = VALID_ENGINES.includes(
+    engineRaw as ImageEngine,
+  )
+    ? (engineRaw as ImageEngine)
+    : "grok";
+
   const xaiApiKey =
     overrides?.xaiApiKey || process.env.XAI_API_KEY || rc.xaiApiKey || "";
+  const googleApiKey =
+    overrides?.googleApiKey ||
+    process.env.GOOGLE_API_KEY ||
+    rc.googleApiKey ||
+    "";
   const elevenLabsApiKey =
     overrides?.elevenLabsApiKey ||
     process.env.ELEVENLABS_API_KEY ||
@@ -81,13 +97,24 @@ export async function loadConfig(
     rc.elevenLabsVoiceId ||
     "";
 
-  if (!xaiApiKey) {
+  // 엔진별 API 키 검증
+  if (imageEngine === "grok" && !xaiApiKey) {
     return {
       ok: false,
       error: {
         code: "E001",
         message:
           "XAI_API_KEY가 설정되지 않았습니다. 환경변수 또는 .cutflowrc를 확인하세요.",
+      },
+    };
+  }
+  if ((imageEngine === "gemini" || imageEngine === "imagen") && !googleApiKey) {
+    return {
+      ok: false,
+      error: {
+        code: "E001",
+        message:
+          "GOOGLE_API_KEY가 설정되지 않았습니다. https://aistudio.google.com 에서 발급하세요.",
       },
     };
   }
@@ -111,7 +138,9 @@ export async function loadConfig(
   }
 
   const config: CutFlowConfig = {
+    imageEngine,
     xaiApiKey,
+    googleApiKey,
     elevenLabsApiKey,
     elevenLabsVoiceId,
     outputDir:
