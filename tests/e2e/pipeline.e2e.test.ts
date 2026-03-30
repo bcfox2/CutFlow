@@ -87,7 +87,9 @@ describe("E2E: 전체 파이프라인 (Mock API)", () => {
   it("2장면 대본 → CapCut 프로젝트 생성 성공", async () => {
     const scriptPath = join(fixtureDir, "sample-2scene.txt");
     const config: CutFlowConfig = {
+      imageEngine: "grok",
       xaiApiKey: "test-xai-key",
+      googleApiKey: "",
       elevenLabsApiKey: "test-elevenlabs-key",
       elevenLabsVoiceId: "test-voice-id",
       outputDir,
@@ -112,7 +114,9 @@ describe("E2E: 전체 파이프라인 (Mock API)", () => {
   it("생성된 CapCut JSON 구조 검증", async () => {
     const scriptPath = join(fixtureDir, "sample-2scene.txt");
     const config: CutFlowConfig = {
+      imageEngine: "grok",
       xaiApiKey: "test-xai-key",
+      googleApiKey: "",
       elevenLabsApiKey: "test-elevenlabs-key",
       elevenLabsVoiceId: "test-voice-id",
       outputDir,
@@ -192,7 +196,9 @@ describe("E2E: 전체 파이프라인 (Mock API)", () => {
   it("프로젝트 폴더에 필수 파일 존재", async () => {
     const scriptPath = join(fixtureDir, "sample-2scene.txt");
     const config: CutFlowConfig = {
+      imageEngine: "grok",
       xaiApiKey: "test-xai-key",
+      googleApiKey: "",
       elevenLabsApiKey: "test-elevenlabs-key",
       elevenLabsVoiceId: "test-voice-id",
       outputDir,
@@ -229,7 +235,9 @@ describe("E2E: 전체 파이프라인 (Mock API)", () => {
   it("CapCut 미디어 경로가 절대 경로로 설정", async () => {
     const scriptPath = join(fixtureDir, "sample-2scene.txt");
     const config: CutFlowConfig = {
+      imageEngine: "grok",
       xaiApiKey: "test-xai-key",
+      googleApiKey: "",
       elevenLabsApiKey: "test-elevenlabs-key",
       elevenLabsVoiceId: "test-voice-id",
       outputDir,
@@ -262,7 +270,9 @@ describe("E2E: 전체 파이프라인 (Mock API)", () => {
   it("outputDir 없으면 E005 에러", async () => {
     const scriptPath = join(fixtureDir, "sample-2scene.txt");
     const config: CutFlowConfig = {
+      imageEngine: "grok",
       xaiApiKey: "test-xai-key",
+      googleApiKey: "",
       elevenLabsApiKey: "test-elevenlabs-key",
       elevenLabsVoiceId: "test-voice-id",
       outputDir: undefined as unknown as string, // 의도적 누락

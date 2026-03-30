@@ -50,9 +50,14 @@ export interface TimelineSegment {
   text?: string; // 텍스트 세그먼트용
 }
 
+// ─── 이미지 엔진 ───
+export type ImageEngine = "grok" | "gemini" | "imagen";
+
 // ─── 설정 ───
 export interface CutFlowConfig {
+  imageEngine: ImageEngine;
   xaiApiKey: string;
+  googleApiKey: string;
   elevenLabsApiKey: string;
   elevenLabsVoiceId: string;
   outputDir?: string;
@@ -65,6 +70,26 @@ export interface CutFlowConfig {
   imageStyle: string;
   imageSize: string;
   ttsModel: string;
+}
+
+// ─── 진행 상황 보고 ───
+export type ProgressPhase = "parse" | "image" | "tts" | "timeline" | "export";
+
+export interface ProgressEvent {
+  phase: ProgressPhase;
+  current: number;
+  total: number;
+  sceneIndex?: number;
+  message: string;
+}
+
+export type ProgressCallback = (event: ProgressEvent) => void;
+
+// ─── 파이프라인 결과 ───
+export interface PipelineResult {
+  projectPath: string;
+  sceneCount: number;
+  totalDuration: number;
 }
 
 // ─── 에러 처리 ───

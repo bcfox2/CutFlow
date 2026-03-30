@@ -1,6 +1,6 @@
 {
   "name": "cutflow",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "대본만 넣으면 CapCut 프로젝트 파일로 완성하는 CLI 도구",
   "type": "module",
   "bin": {
@@ -26,6 +26,7 @@
   "license": "MIT",
   "dependencies": {
     "@clack/prompts": "^1.1.0",
+    "@google/genai": "^1.47.0",
     "commander": "^14.0.3",
     "dotenv": "^17.3.1",
     "tsup": "^8.5.1",

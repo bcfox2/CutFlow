@@ -4,11 +4,15 @@ import { randomUUID } from "node:crypto";
 import type { Scene, Subtitle, Result } from "../types/index.js";
 import { MICROSECONDS_PER_SECOND } from "../types/index.js";
 
+const MAX_RETRIES = 5;
+const BASE_DELAY_MS = 1500;
+
 interface TTSGenOptions {
   apiKey: string;
   voiceId: string;
   model?: string;
   outputDir: string;
+  onSceneComplete?: (sceneIndex: number) => void;
 }
 
 interface TTSResult {
@@ -29,7 +33,7 @@ export async function generateTTS(
   for (const scene of scenes) {
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
         // TTS with timestamps 요청
         const response = await fetch(
@@ -91,21 +95,19 @@ export async function generateTTS(
           subtitles,
         });
 
+        options.onSceneComplete?.(scene.index);
         break; // 성공 시 재시도 중단
       } catch (err) {
         lastError = err as Error;
-        if (attempt < 2) {
-          await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+        if (attempt < MAX_RETRIES - 1) {
+          const delay =
+            BASE_DELAY_MS * Math.pow(2, attempt) + Math.random() * 500;
+          await new Promise((r) => setTimeout(r, delay));
         }
       }
     }
 
     if (!results.find((r) => r.sceneIndex === scene.index)) {
-      console.error(
-        "장면 %d TTS 생성 실패: %s",
-        scene.index + 1,
-        lastError?.message || "알 수 없는 오류",
-      );
       return {
         ok: false,
         error: {
